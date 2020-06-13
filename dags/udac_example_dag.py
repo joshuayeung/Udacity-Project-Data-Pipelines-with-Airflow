@@ -10,20 +10,26 @@ from helpers import SqlQueries
 # AWS_KEY = os.environ.get('AWS_KEY')
 # AWS_SECRET = os.environ.get('AWS_SECRET')
 
+dq_checks=[
+        {'check_sql': "SELECT COUNT(*) FROM users WHERE userid is null", 'expected_result': 0},
+        {'check_sql': "SELECT COUNT(*) FROM songs WHERE songid is null", 'expected_result': 0}
+    ]
+
 default_args = {
     'owner': 'udacity',
-    'start_date': datetime(2019, 1, 12),
+    'start_date': datetime(2020, 6, 12),
     'depends_on_past': False,
     'retries': 3,
     'retry_delay': timedelta(minutes=5),
     'catchup': False,
-    'email_on_retry': False
+    'email_on_retry': False,
+    'schedule_interval': 'None'
 }
 
 dag = DAG('udac_example_dag',
           default_args=default_args,
           description='Load and transform data in Redshift with Airflow',
-          schedule_interval='0 * * * *'
+          schedule_interval=None
         )
 
 start_operator = DummyOperator(task_id='Begin_execution',  dag=dag)
@@ -52,7 +58,7 @@ stage_songs_to_redshift = StageToRedshiftOperator(
     aws_credentials_id='aws_credentials',
     table='staging_songs',
     s3_bucket='udacity-dend',
-    s3_key='song_data',
+    s3_key='song_data/A/A/A/',
     copy_json_option='auto',
     dag=dag
 )
@@ -70,37 +76,41 @@ load_user_dimension_table = LoadDimensionOperator(
     redshift_conn_id='redshift',
     table='users',
     select_sql=SqlQueries.user_table_insert,
+    append_data=True,
     dag=dag
 )
 
 load_song_dimension_table = LoadDimensionOperator(
     task_id='Load_song_dim_table',
     redshift_conn_id='redshift',
-    table='users',
+    table='songs',
     select_sql=SqlQueries.song_table_insert,
+    append_data=True,
     dag=dag
 )
 
 load_artist_dimension_table = LoadDimensionOperator(
     task_id='Load_artist_dim_table',
     redshift_conn_id='redshift',
-    table='users',
+    table='artists',
     select_sql=SqlQueries.artist_table_insert,
+    append_data=True,
     dag=dag
 )
 
 load_time_dimension_table = LoadDimensionOperator(
     task_id='Load_time_dim_table',
     redshift_conn_id='redshift',
-    table='users',
+    table='time',
     select_sql=SqlQueries.time_table_insert,
+    append_data=True,
     dag=dag
 )
 
 run_quality_checks = DataQualityOperator(
     task_id='Run_data_quality_checks',
     redshift_conn_id='redshift',
-    test_query='select count(*) from songs where songid is null;',
+    dq_checks=dq_checks,
     expected_result=0,
     dag=dag
 )
